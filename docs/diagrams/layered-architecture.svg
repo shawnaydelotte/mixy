@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 620" role="img" aria-labelledby="title desc">
+  <title id="title">Mixy layered architecture</title>
+  <desc id="desc">Four layers: SwiftUI, Core policy and mix math, HAL discovery, and AUHAL I/O, sitting above Core Audio and MixyHAL.</desc>
+  <defs>
+    <style>
+      .bg { fill: #141618; }
+      .title { fill: #f2f4f6; font: 700 22px "SF Pro Display", Helvetica, Arial, sans-serif; }
+      .sub { fill: #9aa3ad; font: 400 12px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .layer { rx: 12; }
+      .ui { fill: #1d2a36; stroke: #66b8ff; stroke-width: 1.5; }
+      .core { fill: #1a2b27; stroke: #6bdbb8; stroke-width: 1.5; }
+      .hal { fill: #261f33; stroke: #b89efb; stroke-width: 1.5; }
+      .io { fill: #2a2218; stroke: #ff9e38; stroke-width: 1.5; }
+      .sys { fill: #1c1e21; stroke: #4a5058; stroke-width: 1.2; }
+      .lbl { fill: #e8edf2; font: 700 13px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .item { fill: #c5ced6; font: 400 12px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .chip { fill: #0f1113; stroke-width: 1; rx: 6; }
+      .arr { stroke: #6b737c; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b737c"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="980" height="620"/>
+  <text class="title" x="32" y="42">Mixy — layered architecture</text>
+  <text class="sub" x="32" y="62">Native macOS mixer · first-party Core Audio · AirPlay isolated from the local clock</text>
+
+  <rect class="layer ui" x="28" y="84" width="924" height="88"/>
+  <text class="lbl" x="44" y="108">UI  ·  SwiftUI</text>
+  <rect class="chip" stroke="#66b8ff" x="44" y="122" width="150" height="32"/><text class="item" x="58" y="142">MixyApp</text>
+  <rect class="chip" stroke="#66b8ff" x="214" y="122" width="250" height="32"/><text class="item" x="228" y="142">MixerView / Track Manager</text>
+  <rect class="chip" stroke="#66b8ff" x="484" y="122" width="220" height="32"/><text class="item" x="498" y="142">MixerController</text>
+  <rect class="chip" stroke="#66b8ff" x="724" y="122" width="200" height="32"/><text class="item" x="738" y="142">SettingsView</text>
+
+  <path class="arr" d="M 514 172 L 514 198"/>
+
+  <rect class="layer core" x="28" y="200" width="924" height="132"/>
+  <text class="lbl" x="44" y="224">Core  ·  policy + mix math (no live I/O)</text>
+  <rect class="chip" stroke="#6bdbb8" x="44" y="238" width="170" height="32"/><text class="item" x="56" y="258">MixerDesk / Chrome</text>
+  <rect class="chip" stroke="#6bdbb8" x="230" y="238" width="200" height="32"/><text class="item" x="242" y="258">Input / Output catalogs</text>
+  <rect class="chip" stroke="#6bdbb8" x="446" y="238" width="210" height="32"/><text class="item" x="458" y="258">AirPlayPolicy → MixGraph</text>
+  <rect class="chip" stroke="#6bdbb8" x="672" y="238" width="250" height="32"/><text class="item" x="686" y="258">AudioVideoRouter</text>
+  <rect class="chip" stroke="#6bdbb8" x="44" y="282" width="210" height="32"/><text class="item" x="56" y="302">StripMix → ChannelMixer</text>
+  <rect class="chip" stroke="#6bdbb8" x="270" y="282" width="280" height="32"/><text class="item" x="282" y="302">PCMBuffer / AirPlaySafeBuffer</text>
+  <rect class="chip" stroke="#6bdbb8" x="566" y="282" width="180" height="32"/><text class="item" x="578" y="302">DeviceClassifier</text>
+  <rect class="chip" stroke="#6bdbb8" x="762" y="282" width="160" height="32"/><text class="item" x="774" y="302">LoopbackBuffer</text>
+
+  <path class="arr" d="M 280 332 L 200 358"/>
+  <path class="arr" d="M 700 332 L 780 358"/>
+
+  <rect class="layer hal" x="28" y="360" width="452" height="132"/>
+  <text class="lbl" x="44" y="384">HAL  ·  discovery</text>
+  <rect class="chip" stroke="#b89efb" x="44" y="398" width="200" height="28"/><text class="item" x="54" y="416">HALDeviceEnumerator</text>
+  <rect class="chip" stroke="#b89efb" x="256" y="398" width="200" height="28"/><text class="item" x="266" y="416">HALProcessEnumerator</text>
+  <rect class="chip" stroke="#b89efb" x="44" y="436" width="200" height="28"/><text class="item" x="54" y="454">SessionAirPlayBrowser</text>
+  <rect class="chip" stroke="#b89efb" x="256" y="436" width="200" height="28"/><text class="item" x="266" y="454">ProcessTapAdapter</text>
+
+  <rect class="layer io" x="500" y="360" width="452" height="132"/>
+  <text class="lbl" x="516" y="384">IO  ·  live AUHAL cycle</text>
+  <rect class="chip" stroke="#ff9e38" x="516" y="398" width="200" height="28"/><text class="item" x="528" y="416">AudioIOCoordinator</text>
+  <rect class="chip" stroke="#ff9e38" x="728" y="398" width="200" height="28"/><text class="item" x="740" y="416">AUHALCallbackBinding</text>
+  <rect class="chip" stroke="#ff9e38" x="516" y="436" width="200" height="28"/><text class="item" x="528" y="454">MixIOCycle</text>
+  <rect class="chip" stroke="#ff9e38" x="728" y="436" width="200" height="28"/><text class="item" x="740" y="454">mixyAUHALCallback</text>
+
+  <path class="arr" d="M 490 516 L 490 536"/>
+
+  <rect class="layer sys" x="28" y="540" width="924" height="56"/>
+  <text class="lbl" x="44" y="564">System</text>
+  <text class="item" x="44" y="582">coreaudiod  ·  AUHAL devices  ·  CATap private aggregates  ·  MixyHAL.driver (“Mixy Loopback”, 8 ch) at /Library/Audio/Plug-Ins/HAL</text>
+</svg>

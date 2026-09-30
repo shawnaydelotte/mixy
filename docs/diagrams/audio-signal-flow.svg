@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 560" role="img" aria-labelledby="title desc">
+  <title id="title">Mixy audio signal flow</title>
+  <desc id="desc">Hardware and application captures enter the AUHAL input callback, pass through StripMix and ChannelMixer, then split to immediate local outputs and the isolated AirPlay ring.</desc>
+  <defs>
+    <style>
+      .bg { fill: #141618; }
+      .title { fill: #f2f4f6; font: 700 22px "SF Pro Display", Helvetica, Arial, sans-serif; }
+      .sub { fill: #9aa3ad; font: 400 12px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .box { rx: 10; fill: #1c1e21; stroke-width: 1.6; }
+      .t { fill: #e8edf2; font: 700 13px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .d { fill: #a7b0b8; font: 400 11px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .arr { fill: none; stroke-width: 1.8; marker-end: url(#arrow); }
+      .hw { stroke: #66b8ff; }
+      .app { stroke: #6bdbb8; }
+      .mix { stroke: #c5ced6; }
+      .loc { stroke: #b89efb; }
+      .ap { stroke: #ff9e38; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a929a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1040" height="560"/>
+  <text class="title" x="32" y="40">Mixy — audio signal flow</text>
+  <text class="sub" x="32" y="60">Same path for the UI, unit tests, and live AUHAL callbacks</text>
+
+  <rect class="box hw" x="28" y="96" width="220" height="70"/>
+  <text class="t" x="44" y="124">Hardware input</text>
+  <text class="d" x="44" y="144">AUHAL EnableIO input</text>
+  <text class="d" x="44" y="160">AudioUnitRender</text>
+
+  <rect class="box app" x="28" y="196" width="220" height="88"/>
+  <text class="t" x="44" y="224">Application audio</text>
+  <text class="d" x="44" y="244">CATapDescription</text>
+  <text class="d" x="44" y="260">private aggregate</text>
+  <text class="d" x="44" y="276">mixy.tap.{uid}</text>
+
+  <path class="arr" stroke="#66b8ff" d="M 248 131 L 318 200"/>
+  <path class="arr" stroke="#6bdbb8" d="M 248 240 L 318 220"/>
+
+  <rect class="box mix" x="320" y="176" width="210" height="80"/>
+  <text class="t" x="336" y="204">mixyAUHALCallback</text>
+  <text class="d" x="336" y="224">role = input</text>
+  <text class="d" x="336" y="240">ingestCapture</text>
+
+  <path class="arr" stroke="#8a929a" d="M 530 216 L 598 216"/>
+
+  <rect class="box mix" x="600" y="160" width="200" height="112"/>
+  <text class="t" x="616" y="188">StripMix.sources</text>
+  <text class="d" x="616" y="208">mute / solo / fader</text>
+  <text class="d" x="616" y="224">pan on ch 0–1</text>
+  <text class="d" x="616" y="240">mono → [0, 0]</text>
+  <text class="d" x="616" y="256">channel map</text>
+
+  <path class="arr" stroke="#8a929a" d="M 800 216 L 848 216"/>
+
+  <rect class="box mix" x="850" y="176" width="160" height="80"/>
+  <text class="t" x="866" y="204">ChannelMixer</text>
+  <text class="d" x="866" y="224">sum → mix bus</text>
+  <text class="d" x="866" y="240">≥ 2 channels</text>
+
+  <path class="arr" stroke="#b89efb" d="M 930 256 L 930 310 L 430 310 L 430 336"/>
+  <path class="arr" stroke="#ff9e38" d="M 930 256 L 930 310 L 780 310 L 780 336"/>
+
+  <rect class="box loc" x="300" y="338" width="260" height="96"/>
+  <text class="t" x="316" y="366">Local outputs</text>
+  <text class="d" x="316" y="386">StripMix on output peers</text>
+  <text class="d" x="316" y="402">512-frame buffer</text>
+  <text class="d" x="316" y="418">callback .localOutput now</text>
+
+  <rect class="box ap" x="640" y="338" width="280" height="96"/>
+  <text class="t" x="656" y="366">Isolated AirPlay</text>
+  <text class="d" x="656" y="386">write AirPlaySafeBuffer only</text>
+  <text class="d" x="656" y="402">4096 + 4096 extra frames</text>
+  <text class="d" x="656" y="418">callback reads surplus only</text>
+
+  <rect class="box loc" x="300" y="456" width="260" height="72"/>
+  <text class="t" x="316" y="484">Built-in / USB / virtual / HDMI</text>
+  <text class="d" x="316" y="504">shared local sample clock</text>
+
+  <rect class="box ap" x="640" y="456" width="280" height="72"/>
+  <text class="t" x="656" y="484">AirPlay / RAOP destinations</text>
+  <text class="d" x="656" y="504">own clock · never in aggregate</text>
+
+  <path class="arr" stroke="#b89efb" d="M 430 434 L 430 454"/>
+  <path class="arr" stroke="#ff9e38" d="M 780 434 L 780 454"/>
+</svg>

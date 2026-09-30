@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 520" role="img" aria-labelledby="title desc">
+  <title id="title">Mixy AirPlay isolation policy</title>
+  <desc id="desc">Enabled local outputs share a 512-frame clock. Enabled AirPlay destinations are isolated onto a 4096-frame path with a 4096-frame extra-latency cushion. AirPlay cannot join a local aggregate.</desc>
+  <defs>
+    <style>
+      .bg { fill: #141618; }
+      .title { fill: #f2f4f6; font: 700 22px "SF Pro Display", Helvetica, Arial, sans-serif; }
+      .sub { fill: #9aa3ad; font: 400 12px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .panel { rx: 14; fill: #1a1c1f; stroke-width: 1.8; }
+      .h { fill: #e8edf2; font: 700 15px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .p { fill: #c5ced6; font: 400 12px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .k { fill: #8a929a; font: 600 11px "SF Pro Text", Helvetica, Arial, sans-serif; letter-spacing: 0.6px; }
+      .chip { rx: 7; fill: #101214; stroke-width: 1.2; }
+      .ct { fill: #dde3e8; font: 400 12px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .ban { fill: #2a1616; stroke: #e05a52; stroke-width: 1.6; rx: 10; }
+      .bt { fill: #ffb4ae; font: 700 13px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .bd { fill: #e0b8b4; font: 400 12px "SF Pro Text", Helvetica, Arial, sans-serif; }
+      .arr { fill: none; stroke: #6b737c; stroke-width: 1.6; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b737c"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="980" height="520"/>
+  <text class="title" x="32" y="40">Mixy — AirPlay isolation</text>
+  <text class="sub" x="32" y="60">AirPlayPolicy.buildGraph  ·  MixPolicyError.airPlayCannotJoinLocalClock</text>
+
+  <rect class="chip" stroke="#c5ced6" x="360" y="88" width="260" height="56"/>
+  <text class="h" x="384" y="114" text-anchor="start">Enabled mix bus</text>
+  <text class="p" x="384" y="132">ChannelMixer output slice</text>
+
+  <path class="arr" d="M 390 144 L 250 188"/>
+  <path class="arr" d="M 590 144 L 730 188"/>
+
+  <rect class="panel" stroke="#b89efb" x="32" y="196" width="430" height="200"/>
+  <text class="k" x="52" y="222">LOCAL CLOCK</text>
+  <text class="h" x="52" y="246">localClockDeviceUIDs</text>
+  <text class="p" x="52" y="268">Built-in, USB, Thunderbolt, PCI, HDMI,</text>
+  <text class="p" x="52" y="286">DisplayPort, virtual (Mixy Loopback), aggregate</text>
+  <rect class="chip" stroke="#b89efb" x="52" y="306" width="180" height="32"/><text class="ct" x="66" y="326">buffer 512 frames</text>
+  <rect class="chip" stroke="#b89efb" x="244" y="306" width="190" height="32"/><text class="ct" x="258" y="326">immediate AUHAL out</text>
+  <text class="p" x="52" y="372">DeviceClassifier ≠ airPlay  →  allowsSharedLocalClock</text>
+
+  <rect class="panel" stroke="#ff9e38" x="518" y="196" width="430" height="200"/>
+  <text class="k" x="538" y="222">ISOLATED PATH</text>
+  <text class="h" x="538" y="246">isolatedAirPlayUIDs</text>
+  <text class="p" x="538" y="268">HAL AirPlay + session _airplay._tcp / _raop._tcp</text>
+  <text class="p" x="538" y="286">asDeviceRecord transport = AirPlay</text>
+  <rect class="chip" stroke="#ff9e38" x="538" y="306" width="180" height="32"/><text class="ct" x="552" y="326">buffer 4096 frames</text>
+  <rect class="chip" stroke="#ff9e38" x="730" y="306" width="190" height="32"/><text class="ct" x="744" y="326">extra latency 4096</text>
+  <text class="p" x="538" y="372">Write AirPlaySafeBuffer only · callback is consumer</text>
+
+  <rect class="ban" x="32" y="420" width="916" height="72"/>
+  <text class="bt" x="52" y="450">AirPlay cannot join a local Core Audio aggregate</text>
+  <text class="bd" x="52" y="472">AirPlayPolicy.localAggregateUIDs(including:) throws MixPolicyError.airPlayCannotJoinLocalClock. AirPlay callbacks emit silence while the ring holds 4096 frames or fewer, and a read never drains that cushion.</text>
+</svg>

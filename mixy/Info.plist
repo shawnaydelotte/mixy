@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_airplay._tcp</string>
+		<string>_raop._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Mixy finds AirPlay speakers and TVs available to your signed-in Mac.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Mixy needs audio input access to mix microphones and music interfaces.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Mixy mixes live signals from microphones, audio interfaces, and other applications.</string>
+</dict>
+</plist>
