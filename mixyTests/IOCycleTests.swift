@@ -276,6 +276,35 @@ final class IOCycleTests: XCTestCase {
         XCTAssertEqual(held, [Float](repeating: 0, count: held.count), "the extra-latency cushion stays after the surplus is taken")
     }
 
+    /// A local remix of the capture the input callback just published must not append that slice again.
+    func testOneCaptureIsAppendedToAirPlayOnceWhenTheLocalOutputRemixes() {
+        let clock = unityClock()
+        let cushion = clock.io.currentGraph.extraLatencyFramesAirPlay
+        let frames = cushion + 2
+        var capture = [Float](repeating: 0.2, count: frames * 2)
+        capture[0] = 0.71
+        capture[1] = -0.19
+        drive(clock.io, role: .input, uid: clock.input, samples: &capture, frameCount: frames)
+
+        var surplus = [Float](repeating: -1, count: 4)
+        drive(clock.io, role: .airPlayOutput, uid: clock.air, samples: &surplus, frameCount: 2)
+        XCTAssertEqual(surplus[0], 0.71, accuracy: 0.000_1)
+        XCTAssertEqual(surplus[1], -0.19, accuracy: 0.000_1)
+
+        var local = [Float](repeating: -1, count: 8)
+        drive(clock.io, role: .localOutput, uid: clock.local, samples: &local, frameCount: 4)
+        XCTAssertEqual(local[0], 0.71, accuracy: 0.000_1)
+        XCTAssertEqual(local[1], -0.19, accuracy: 0.000_1)
+
+        var again = [Float](repeating: -1, count: 4)
+        drive(clock.io, role: .airPlayOutput, uid: clock.air, samples: &again, frameCount: 2)
+        XCTAssertEqual(
+            again,
+            [Float](repeating: 0, count: again.count),
+            "remixing this capture must leave the AirPlay cushion in place"
+        )
+    }
+
     private struct UnityClock {
         var io: AudioIOCoordinator
         var input: String

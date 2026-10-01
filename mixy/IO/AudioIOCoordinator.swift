@@ -128,6 +128,9 @@ public final class AudioIOCoordinator: @unchecked Sendable {
     private var inputCaptures: [String: PCMBuffer] = [:]
     private var captureGeneration: UInt64 = 0
     private var publishedGeneration: UInt64 = 0
+    /// Capture generation already appended to the AirPlay ring. A remix of that
+    /// same generation must not write the slice again.
+    private var airPlayWrittenGeneration: UInt64?
     private var softwareLoopback = LoopbackBuffer(channelCount: 8, frameCapacity: 8192)
     private var airPlayFeeds: [String: AirPlaySafeBuffer] = [:]
     private var inputUnits: [AudioUnit] = []
@@ -164,31 +167,18 @@ public final class AudioIOCoordinator: @unchecked Sendable {
         return graph
     }
 
-    /// Stores a captured input buffer. Called from the AUHAL input callback via `handleHardwareIO`.
+    /// Stores a captured input buffer. The input callback publishes the cycle in the same lock.
     public func ingestCapture(uid: String, buffer: PCMBuffer) {
         lock.lock()
-        inputCaptures[uid] = buffer
-        captureGeneration &+= 1
+        storeCaptureLocked(uid: uid, buffer: buffer)
         lock.unlock()
     }
 
-    /// Capture → ChannelMixer → local outputs; AirPlay only through AirPlaySafeBuffer.
+    /// Capture → ChannelMixer → local outputs. AirPlay is appended once per capture generation.
     @discardableResult
     public func processIOCycle(frameCount: Int, mixChannelCount: Int? = nil) -> IOCycleResult {
         lock.lock()
-        let channels = mixChannelCount
-            ?? MixIOCycle.mixChannelCount(devices: devices, strips: strips, captures: inputCaptures)
-        let result = MixIOCycle.run(
-            captures: inputCaptures,
-            strips: strips,
-            devices: devices,
-            graph: graph,
-            airPlayFeeds: &airPlayFeeds,
-            frameCount: frameCount,
-            mixChannelCount: channels
-        )
-        lastCycle = result
-        publishedGeneration = captureGeneration
+        let result = runCycleLocked(frameCount: frameCount, mixChannelCount: mixChannelCount)
         lock.unlock()
         return result
     }
@@ -203,8 +193,46 @@ public final class AudioIOCoordinator: @unchecked Sendable {
             lock.unlock()
             return last
         }
+        let result = runCycleLocked(frameCount: frameCount, mixChannelCount: nil)
         lock.unlock()
-        return processIOCycle(frameCount: frameCount, mixChannelCount: nil)
+        return result
+    }
+
+    private func storeCaptureLocked(uid: String, buffer: PCMBuffer) {
+        inputCaptures[uid] = buffer
+        captureGeneration &+= 1
+    }
+
+    /// Caller holds `lock`.
+    private func runCycleLocked(frameCount: Int, mixChannelCount: Int?) -> IOCycleResult {
+        let channels = mixChannelCount
+            ?? MixIOCycle.mixChannelCount(devices: devices, strips: strips, captures: inputCaptures)
+        let publishAirPlay = airPlayWrittenGeneration != captureGeneration
+        let result = MixIOCycle.run(
+            captures: inputCaptures,
+            strips: strips,
+            devices: devices,
+            graph: graph,
+            airPlayFeeds: &airPlayFeeds,
+            frameCount: frameCount,
+            mixChannelCount: channels,
+            publishAirPlay: publishAirPlay
+        )
+        if publishAirPlay {
+            airPlayWrittenGeneration = captureGeneration
+        }
+        lastCycle = result
+        publishedGeneration = captureGeneration
+        return result
+    }
+
+    /// Ingest and the mix cycle share one lock, so a local output cannot publish
+    /// the same capture into the AirPlay ring a second time.
+    private func publishCapture(uid: String, buffer: PCMBuffer, frameCount: Int) {
+        lock.lock()
+        storeCaptureLocked(uid: uid, buffer: buffer)
+        _ = runCycleLocked(frameCount: frameCount, mixChannelCount: nil)
+        lock.unlock()
     }
 
     /// Mixes currently captured input buffers through the shipped ChannelMixer.
@@ -236,8 +264,11 @@ public final class AudioIOCoordinator: @unchecked Sendable {
         switch role {
         case .input:
             let samples = Array(UnsafeBufferPointer(start: interleavedFrames, count: count))
-            ingestCapture(uid: uid, buffer: PCMBuffer(samples: samples, channelCount: max(channelCount, 1)))
-            _ = processIOCycle(frameCount: frameCount, mixChannelCount: nil)
+            publishCapture(
+                uid: uid,
+                buffer: PCMBuffer(samples: samples, channelCount: max(channelCount, 1)),
+                frameCount: frameCount
+            )
         case .localOutput:
             let result = cycleForOutput(frameCount: frameCount)
             let buffer = result.localOutputs[uid]

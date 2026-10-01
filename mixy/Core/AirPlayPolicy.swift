@@ -58,10 +58,12 @@ public enum AirPlayPolicy: Sendable {
     public static let localBufferFrames = 512
     public static let airPlayBufferFrames = 4096
     public static let airPlayExtraLatencyFrames = 4096
+    /// One client rate for local and AirPlay units. The mix has no resampler.
+    public static let mixSampleRate: Float64 = 48_000
 
-    /// Device period to request. Never above `ceiling`. A device already running
-    /// at or below that ceiling keeps its shorter period. A device whose minimum
-    /// is above the ceiling is left alone so initialize can succeed.
+    /// Shared period to request. Every device whose minimum is at or under `ceiling`
+    /// gets `requested` (capped by that ceiling). A device whose minimum is above
+    /// the ceiling is left on a period it can initialize.
     public static func deviceBufferFrames(
         requested: Int,
         ceiling: Int,
@@ -75,16 +77,13 @@ public enum AirPlayPolicy: Sendable {
             let current = deviceCurrent > 0 ? deviceCurrent : minimum
             return max(current, minimum)
         }
-        let current = deviceCurrent > 0 ? deviceCurrent : asked
-        if current <= asked {
-            return max(current, minimum)
-        }
         return max(asked, minimum)
     }
 
-    /// Use the device's nominal rate so AUHAL does not insert a sample-rate converter.
-    public static func streamSampleRate(deviceNominal: Float64) -> Float64 {
-        deviceNominal > 0 ? deviceNominal : 48_000
+    /// Client stream rate for every unit. Device nominal is ignored because the mix
+    /// sums frames 1:1 and AUHAL converts each device to this rate.
+    public static func streamSampleRate(deviceNominal _: Float64) -> Float64 {
+        mixSampleRate
     }
 
     public static func allowsSharedLocalClock(_ device: DeviceRecord) -> Bool {

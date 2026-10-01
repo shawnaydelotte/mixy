@@ -31,7 +31,8 @@ public enum MixIOCycle: Sendable {
         graph: MixGraph,
         airPlayFeeds: inout [String: AirPlaySafeBuffer],
         frameCount: Int,
-        mixChannelCount: Int
+        mixChannelCount: Int,
+        publishAirPlay: Bool = true
     ) -> IOCycleResult {
         let sources = Self.sources(from: captures, strips: strips, destinationChannelCount: mixChannelCount)
         let mixed = ChannelMixer.mix(
@@ -71,12 +72,14 @@ public enum MixIOCycle: Sendable {
                 frameCount: frameCount
             )
             if isolated.contains(strip.uid) {
-                if airPlayFeeds[strip.uid] == nil
-                    || airPlayFeeds[strip.uid]?.channelCount != destChannels {
-                    airPlayFeeds[strip.uid] = AirPlaySafeBuffer(channelCount: destChannels)
+                if publishAirPlay {
+                    if airPlayFeeds[strip.uid] == nil
+                        || airPlayFeeds[strip.uid]?.channelCount != destChannels {
+                        airPlayFeeds[strip.uid] = AirPlaySafeBuffer(channelCount: destChannels)
+                    }
+                    // Producer only: AirPlay hardware callback is the sole consumer.
+                    airPlayFeeds[strip.uid]?.write(routed)
                 }
-                // Producer only: AirPlay hardware callback is the sole consumer.
-                airPlayFeeds[strip.uid]?.write(routed)
                 airPlayOutputs[strip.uid] = PCMBuffer(frameCount: 0, channelCount: destChannels)
             } else {
                 localOutputs[strip.uid] = routed

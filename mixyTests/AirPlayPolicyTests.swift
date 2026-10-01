@@ -95,11 +95,15 @@ final class AirPlayPolicyTests: XCTestCase {
     }
 
     func testDeviceBufferPeriodStaysWithinTheLatencyCeiling() {
-        XCTAssertEqual(
-            AirPlayPolicy.deviceBufferFrames(requested: 512, ceiling: 512, deviceCurrent: 128, deviceMinimum: 32),
-            128,
-            "a device already under the ceiling keeps the shorter period"
+        let shortDevice = AirPlayPolicy.deviceBufferFrames(
+            requested: 512, ceiling: 512, deviceCurrent: 128, deviceMinimum: 32
         )
+        let longDevice = AirPlayPolicy.deviceBufferFrames(
+            requested: 512, ceiling: 512, deviceCurrent: 512, deviceMinimum: 64
+        )
+        XCTAssertEqual(shortDevice, longDevice, "local devices share one period")
+        XCTAssertEqual(shortDevice, 512)
+        XCTAssertLessThanOrEqual(shortDevice, 512)
         XCTAssertEqual(
             AirPlayPolicy.deviceBufferFrames(requested: 512, ceiling: 512, deviceCurrent: 4096, deviceMinimum: 64),
             512
@@ -119,11 +123,17 @@ final class AirPlayPolicyTests: XCTestCase {
         )
         XCTAssertEqual(
             AirPlayPolicy.deviceBufferFrames(requested: 4096, ceiling: 4096, deviceCurrent: 256, deviceMinimum: 64),
-            256
+            4096
         )
-        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: 44_100), 44_100)
-        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: 0), 48_000)
-        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: -1), 48_000)
+        XCTAssertEqual(AirPlayPolicy.mixSampleRate, 48_000)
+        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: 44_100), AirPlayPolicy.mixSampleRate)
+        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: 48_000), AirPlayPolicy.mixSampleRate)
+        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: 0), AirPlayPolicy.mixSampleRate)
+        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: -1), AirPlayPolicy.mixSampleRate)
+        XCTAssertEqual(
+            AirPlayPolicy.streamSampleRate(deviceNominal: 44_100),
+            AirPlayPolicy.streamSampleRate(deviceNominal: 96_000)
+        )
 
         let graph = AirPlayPolicy.buildGraph(
             devices: [airPlay, music, builtIn],
