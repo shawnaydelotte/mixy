@@ -126,6 +126,8 @@ public final class AudioIOCoordinator: @unchecked Sendable {
     private var strips: [MixerStrip] = []
     private var devices: [DeviceRecord] = []
     private var inputCaptures: [String: PCMBuffer] = [:]
+    private var captureGeneration: UInt64 = 0
+    private var publishedGeneration: UInt64 = 0
     private var softwareLoopback = LoopbackBuffer(channelCount: 8, frameCapacity: 8192)
     private var airPlayFeeds: [String: AirPlaySafeBuffer] = [:]
     private var inputUnits: [AudioUnit] = []
@@ -166,6 +168,7 @@ public final class AudioIOCoordinator: @unchecked Sendable {
     public func ingestCapture(uid: String, buffer: PCMBuffer) {
         lock.lock()
         inputCaptures[uid] = buffer
+        captureGeneration &+= 1
         lock.unlock()
     }
 
@@ -185,14 +188,18 @@ public final class AudioIOCoordinator: @unchecked Sendable {
             mixChannelCount: channels
         )
         lastCycle = result
+        publishedGeneration = captureGeneration
         lock.unlock()
         return result
     }
 
-    /// Reuses the cycle already run from an input callback in this slice; otherwise mixes now.
+    /// Reuses the cycle published for the captures still in hand. A newer capture
+    /// invalidates that cycle so a local output cannot replay the previous slice.
     private func cycleForOutput(frameCount: Int) -> IOCycleResult {
         lock.lock()
-        if let last = lastCycle, last.mixed.frameCount == frameCount {
+        if let last = lastCycle,
+           last.mixed.frameCount == frameCount,
+           publishedGeneration == captureGeneration {
             lock.unlock()
             return last
         }
@@ -542,7 +549,26 @@ public final class AudioIOCoordinator: @unchecked Sendable {
             UInt32(MemoryLayout<AudioDeviceID>.size)
         )
 
-        var frames = UInt32(bufferFrames)
+        let currentFrames: UInt32 = HALProperty.value(
+            object: deviceID,
+            selector: kAudioDevicePropertyBufferFrameSize
+        ) ?? 0
+        let range: AudioValueRange? = HALProperty.value(
+            object: deviceID,
+            selector: kAudioDevicePropertyBufferFrameSizeRange
+        )
+        let minimumFrames = Int((range?.mMinimum ?? 1).rounded(.up))
+        let ceiling = role == .airPlayOutput
+            ? AirPlayPolicy.airPlayBufferFrames
+            : AirPlayPolicy.localBufferFrames
+        var frames = UInt32(
+            AirPlayPolicy.deviceBufferFrames(
+                requested: bufferFrames,
+                ceiling: ceiling,
+                deviceCurrent: Int(currentFrames),
+                deviceMinimum: max(minimumFrames, 1)
+            )
+        )
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyBufferFrameSize,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -557,8 +583,12 @@ public final class AudioIOCoordinator: @unchecked Sendable {
             &frames
         )
 
+        let nominalRate: Float64 = HALProperty.value(
+            object: deviceID,
+            selector: kAudioDevicePropertyNominalSampleRate
+        ) ?? 0
         var asbd = AudioStreamBasicDescription(
-            mSampleRate: 48_000,
+            mSampleRate: AirPlayPolicy.streamSampleRate(deviceNominal: nominalRate),
             mFormatID: kAudioFormatLinearPCM,
             mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved,
             mBytesPerPacket: 4,

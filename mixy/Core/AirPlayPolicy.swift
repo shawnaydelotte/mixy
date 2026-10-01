@@ -21,6 +21,10 @@ public struct MixGraph: Equatable, Sendable, Codable {
     public var bufferFramesAirPlay: Int
     public var extraLatencyFramesAirPlay: Int
 
+    public var localBufferLabel: String { "\(bufferFramesLocal) frames" }
+    public var airPlayBufferLabel: String { "\(bufferFramesAirPlay) frames" }
+    public var airPlayExtraLatencyLabel: String { "\(extraLatencyFramesAirPlay) frames" }
+
     public var airPlayDestinations: [AirPlayDestination] {
         isolatedAirPlayUIDs.map {
             AirPlayDestination(
@@ -55,6 +59,34 @@ public enum AirPlayPolicy: Sendable {
     public static let airPlayBufferFrames = 4096
     public static let airPlayExtraLatencyFrames = 4096
 
+    /// Device period to request. Never above `ceiling`. A device already running
+    /// at or below that ceiling keeps its shorter period. A device whose minimum
+    /// is above the ceiling is left alone so initialize can succeed.
+    public static func deviceBufferFrames(
+        requested: Int,
+        ceiling: Int,
+        deviceCurrent: Int,
+        deviceMinimum: Int
+    ) -> Int {
+        let cap = max(ceiling, 1)
+        let asked = min(max(requested, 1), cap)
+        let minimum = max(deviceMinimum, 1)
+        if minimum > cap {
+            let current = deviceCurrent > 0 ? deviceCurrent : minimum
+            return max(current, minimum)
+        }
+        let current = deviceCurrent > 0 ? deviceCurrent : asked
+        if current <= asked {
+            return max(current, minimum)
+        }
+        return max(asked, minimum)
+    }
+
+    /// Use the device's nominal rate so AUHAL does not insert a sample-rate converter.
+    public static func streamSampleRate(deviceNominal: Float64) -> Float64 {
+        deviceNominal > 0 ? deviceNominal : 48_000
+    }
+
     public static func allowsSharedLocalClock(_ device: DeviceRecord) -> Bool {
         DeviceClassifier.classify(device) != .airPlay
     }
@@ -73,9 +105,9 @@ public enum AirPlayPolicy: Sendable {
         return MixGraph(
             localClockDeviceUIDs: local,
             isolatedAirPlayUIDs: airPlay,
-            bufferFramesLocal: localBufferFrames,
-            bufferFramesAirPlay: airPlayBufferFrames,
-            extraLatencyFramesAirPlay: airPlayExtraLatencyFrames
+            bufferFramesLocal: min(localBufferFrames, 512),
+            bufferFramesAirPlay: min(airPlayBufferFrames, 4096),
+            extraLatencyFramesAirPlay: min(airPlayExtraLatencyFrames, 4096)
         )
     }
 

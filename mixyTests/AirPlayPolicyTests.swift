@@ -94,6 +94,78 @@ final class AirPlayPolicyTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(path.bufferedFrameCount, 4, "cushion must remain after a pull")
     }
 
+    func testDeviceBufferPeriodStaysWithinTheLatencyCeiling() {
+        XCTAssertEqual(
+            AirPlayPolicy.deviceBufferFrames(requested: 512, ceiling: 512, deviceCurrent: 128, deviceMinimum: 32),
+            128,
+            "a device already under the ceiling keeps the shorter period"
+        )
+        XCTAssertEqual(
+            AirPlayPolicy.deviceBufferFrames(requested: 512, ceiling: 512, deviceCurrent: 4096, deviceMinimum: 64),
+            512
+        )
+        XCTAssertEqual(
+            AirPlayPolicy.deviceBufferFrames(requested: 512, ceiling: 512, deviceCurrent: 2048, deviceMinimum: 1024),
+            2048,
+            "a device whose minimum is above 512 is left on a period it can initialize"
+        )
+        XCTAssertNotEqual(
+            AirPlayPolicy.deviceBufferFrames(requested: 512, ceiling: 512, deviceCurrent: 2048, deviceMinimum: 1024),
+            512
+        )
+        XCTAssertEqual(
+            AirPlayPolicy.deviceBufferFrames(requested: 4096, ceiling: 4096, deviceCurrent: 8192, deviceMinimum: 128),
+            4096
+        )
+        XCTAssertEqual(
+            AirPlayPolicy.deviceBufferFrames(requested: 4096, ceiling: 4096, deviceCurrent: 256, deviceMinimum: 64),
+            256
+        )
+        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: 44_100), 44_100)
+        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: 0), 48_000)
+        XCTAssertEqual(AirPlayPolicy.streamSampleRate(deviceNominal: -1), 48_000)
+
+        let graph = AirPlayPolicy.buildGraph(
+            devices: [airPlay, music, builtIn],
+            enabledUIDs: [airPlay.uid, music.uid, builtIn.uid]
+        )
+        XCTAssertLessThanOrEqual(graph.bufferFramesLocal, 512)
+        XCTAssertLessThanOrEqual(graph.bufferFramesAirPlay, 4096)
+        XCTAssertLessThanOrEqual(graph.extraLatencyFramesAirPlay, 4096)
+        XCTAssertGreaterThan(graph.bufferFramesAirPlay, graph.bufferFramesLocal)
+        XCTAssertGreaterThan(graph.extraLatencyFramesAirPlay, graph.bufferFramesLocal)
+        XCTAssertEqual(graph.localBufferLabel, "\(graph.bufferFramesLocal) frames")
+        XCTAssertEqual(graph.airPlayBufferLabel, "\(graph.bufferFramesAirPlay) frames")
+        XCTAssertEqual(graph.airPlayExtraLatencyLabel, "\(graph.extraLatencyFramesAirPlay) frames")
+    }
+
+    @MainActor
+    func testSettingsReadoutUsesTheGraphBufferSizes() {
+        let graph = MixGraph(
+            localClockDeviceUIDs: [builtIn.uid],
+            isolatedAirPlayUIDs: [airPlay.uid],
+            bufferFramesLocal: 128,
+            bufferFramesAirPlay: 2048,
+            extraLatencyFramesAirPlay: 1024
+        )
+        XCTAssertNotEqual(graph.bufferFramesLocal, AirPlayPolicy.localBufferFrames)
+        XCTAssertNotEqual(graph.bufferFramesAirPlay, AirPlayPolicy.airPlayBufferFrames)
+        XCTAssertEqual(graph.localBufferLabel, "128 frames")
+        XCTAssertEqual(graph.airPlayBufferLabel, "2048 frames")
+        XCTAssertEqual(graph.airPlayExtraLatencyLabel, "1024 frames")
+
+        let controller = MixerController()
+        XCTAssertEqual(controller.graph.localBufferLabel, "\(controller.graph.bufferFramesLocal) frames")
+        XCTAssertEqual(controller.graph.airPlayBufferLabel, "\(controller.graph.bufferFramesAirPlay) frames")
+        XCTAssertEqual(controller.graph.airPlayExtraLatencyLabel, "\(controller.graph.extraLatencyFramesAirPlay) frames")
+        XCTAssertLessThanOrEqual(controller.graph.bufferFramesLocal, 512)
+        XCTAssertLessThanOrEqual(controller.graph.bufferFramesAirPlay, 4096)
+        XCTAssertLessThanOrEqual(controller.graph.extraLatencyFramesAirPlay, 4096)
+        XCTAssertEqual(controller.io.currentGraph.bufferFramesLocal, controller.graph.bufferFramesLocal)
+        XCTAssertEqual(controller.io.currentGraph.bufferFramesAirPlay, controller.graph.bufferFramesAirPlay)
+        XCTAssertEqual(controller.io.currentGraph.extraLatencyFramesAirPlay, controller.graph.extraLatencyFramesAirPlay)
+    }
+
     func testCoordinatorIsolatesAirPlayFromLocalFeed() {
         let coordinator = AudioIOCoordinator()
         coordinator.update(

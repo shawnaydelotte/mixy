@@ -63,6 +63,7 @@ struct MixyApp: App {
 
         Settings {
             SettingsView()
+                .environment(controller)
         }
     }
 }

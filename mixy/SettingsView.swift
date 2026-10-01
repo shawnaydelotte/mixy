@@ -1,18 +1,20 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(MixerController.self) private var controller
+
     var body: some View {
         TabView {
             Form {
                 Section("Buffers") {
                     LabeledContent("Local buffer") {
-                        Text("\(AirPlayPolicy.localBufferFrames) frames")
+                        Text(controller.graph.localBufferLabel)
                     }
                     LabeledContent("AirPlay buffer") {
-                        Text("\(AirPlayPolicy.airPlayBufferFrames) frames")
+                        Text(controller.graph.airPlayBufferLabel)
                     }
                     LabeledContent("AirPlay extra latency") {
-                        Text("\(AirPlayPolicy.airPlayExtraLatencyFrames) frames")
+                        Text(controller.graph.airPlayExtraLatencyLabel)
                     }
                 }
                 Section {

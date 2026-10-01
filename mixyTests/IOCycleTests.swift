@@ -187,6 +187,161 @@ final class IOCycleTests: XCTestCase {
         XCTAssertEqual(air[1], -0.4 * 0.5, accuracy: 0.000_1)
     }
 
+    /// Local clock: the capture handed to the shipped input callback is the local
+    /// output of that same frame count, starting at frame 0.
+    func testLocalClockCaptureIsPresentInTheSameCycleOutput() {
+        let clock = unityClock()
+        let frames = 16
+        var capture = [Float](repeating: 0.05, count: frames * 2)
+        capture[0] = 0.8
+        capture[1] = -0.4
+        capture[capture.count - 2] = 0.33
+        capture[capture.count - 1] = -0.22
+        drive(clock.io, role: .input, uid: clock.input, samples: &capture, frameCount: frames)
+
+        var local = [Float](repeating: -1, count: frames * 2)
+        drive(clock.io, role: .localOutput, uid: clock.local, samples: &local, frameCount: frames)
+        XCTAssertEqual(local, capture, "local output must carry this cycle's capture from frame 0")
+
+        var secondRead = [Float](repeating: -1, count: frames * 2)
+        drive(clock.io, role: .localOutput, uid: clock.local, samples: &secondRead, frameCount: frames)
+        XCTAssertEqual(secondRead, capture, "a second local callback in this cycle must not insert a queued slice")
+
+        var next = [Float](repeating: 0.02, count: frames * 2)
+        next[0] = -0.9
+        next[1] = 0.41
+        next[next.count - 2] = 0.17
+        next[next.count - 1] = -0.08
+        drive(clock.io, role: .input, uid: clock.input, samples: &next, frameCount: frames)
+        var followed = [Float](repeating: -1, count: frames * 2)
+        drive(clock.io, role: .localOutput, uid: clock.local, samples: &followed, frameCount: frames)
+        XCTAssertEqual(followed, next, "the next capture must occupy frame 0 of the next local callback")
+        XCTAssertNotEqual(followed[0], capture[0])
+
+        let graph = clock.io.currentGraph
+        XCTAssertLessThanOrEqual(graph.bufferFramesLocal, 512)
+        XCTAssertFalse(graph.localClockDeviceUIDs.contains(clock.air))
+        XCTAssertTrue(graph.isolatedAirPlayUIDs.contains(clock.air))
+    }
+
+    /// AirPlay stays silent through a prime of `extraLatencyFrames`, then the callback
+    /// returns only the surplus (the oldest frames), leaving the cushion in place.
+    func testAirPlayCallbackIsSilentThroughTheCushionThenReturnsOnlySurplus() {
+        let clock = unityClock()
+        let graph = clock.io.currentGraph
+        XCTAssertLessThanOrEqual(graph.bufferFramesLocal, 512)
+        XCTAssertLessThanOrEqual(graph.bufferFramesAirPlay, 4096)
+        XCTAssertLessThanOrEqual(graph.extraLatencyFramesAirPlay, 4096)
+        XCTAssertGreaterThan(graph.bufferFramesAirPlay, graph.bufferFramesLocal)
+        XCTAssertGreaterThan(graph.extraLatencyFramesAirPlay, graph.bufferFramesLocal)
+        XCTAssertEqual(graph.extraLatencyFramesAirPlay, AirPlayPolicy.airPlayExtraLatencyFrames)
+        XCTAssertFalse(graph.localClockDeviceUIDs.contains(clock.air))
+        XCTAssertTrue(graph.isolatedAirPlayUIDs.contains(clock.air))
+
+        let impulseFrames = 4
+        var impulse = [Float](repeating: 0, count: impulseFrames * 2)
+        for index in impulse.indices {
+            impulse[index] = Float(index + 1) * 0.1
+        }
+        drive(clock.io, role: .input, uid: clock.input, samples: &impulse, frameCount: impulseFrames)
+
+        var early = [Float](repeating: -1, count: impulseFrames * 2)
+        drive(clock.io, role: .airPlayOutput, uid: clock.air, samples: &early, frameCount: impulseFrames)
+        XCTAssertEqual(early, [Float](repeating: 0, count: early.count), "AirPlay must stay silent before the cushion is primed")
+
+        var local = [Float](repeating: -1, count: impulseFrames * 2)
+        drive(clock.io, role: .localOutput, uid: clock.local, samples: &local, frameCount: impulseFrames)
+        XCTAssertEqual(local, impulse, "the local clock must not wait for the AirPlay cushion")
+
+        let cushion = graph.extraLatencyFramesAirPlay
+        let fill = cushion - impulseFrames
+        XCTAssertGreaterThan(fill, 0)
+        XCTAssertLessThanOrEqual(impulseFrames + fill, 4096)
+        var filler = [Float](repeating: 0.01, count: fill * 2)
+        drive(clock.io, role: .input, uid: clock.input, samples: &filler, frameCount: fill)
+
+        var primed = [Float](repeating: -1, count: impulseFrames * 2)
+        drive(clock.io, role: .airPlayOutput, uid: clock.air, samples: &primed, frameCount: impulseFrames)
+        XCTAssertEqual(primed, [Float](repeating: 0, count: primed.count), "a prime of exactly the extra-latency cushion must not emit those frames")
+
+        var surplus = [Float](repeating: 0.9, count: impulseFrames * 2)
+        drive(clock.io, role: .input, uid: clock.input, samples: &surplus, frameCount: impulseFrames)
+        var pulled = [Float](repeating: -1, count: impulseFrames * 2)
+        drive(clock.io, role: .airPlayOutput, uid: clock.air, samples: &pulled, frameCount: impulseFrames)
+        XCTAssertEqual(pulled, impulse, "AirPlay emits only the surplus, which is the oldest frames")
+        XCTAssertNotEqual(pulled, surplus)
+
+        var held = [Float](repeating: -1, count: impulseFrames * 2)
+        drive(clock.io, role: .airPlayOutput, uid: clock.air, samples: &held, frameCount: impulseFrames)
+        XCTAssertEqual(held, [Float](repeating: 0, count: held.count), "the extra-latency cushion stays after the surplus is taken")
+    }
+
+    private struct UnityClock {
+        var io: AudioIOCoordinator
+        var input: String
+        var local: String
+        var air: String
+    }
+
+    private func unityClock() -> UnityClock {
+        let inputUID = "unity-mic"
+        let localUID = "unity-speakers"
+        let airUID = "unity-airplay"
+        let mic = DeviceRecord(
+            uid: inputUID,
+            name: "Mic",
+            manufacturer: "Mixy",
+            transportType: kAudioDeviceTransportTypeBuiltIn,
+            inputChannelCount: 2,
+            outputChannelCount: 0
+        )
+        let speakers = DeviceRecord(
+            uid: localUID,
+            name: "Speakers",
+            manufacturer: "Mixy",
+            transportType: kAudioDeviceTransportTypeBuiltIn,
+            inputChannelCount: 0,
+            outputChannelCount: 2
+        )
+        let air = DeviceRecord(
+            uid: airUID,
+            name: "HomePod",
+            manufacturer: "Apple Inc.",
+            transportType: kAudioDeviceTransportTypeAirPlay,
+            inputChannelCount: 0,
+            outputChannelCount: 2
+        )
+        let io = AudioIOCoordinator()
+        io.update(
+            devices: [mic, speakers, air],
+            strips: [
+                MixerStrip(uid: inputUID, isEnabled: true, gainDecibels: 0, channelMap: [0, 1], isInput: true),
+                MixerStrip(uid: localUID, isEnabled: true, gainDecibels: 0, channelMap: [0, 1], isInput: false),
+                MixerStrip(uid: airUID, isEnabled: true, gainDecibels: 0, channelMap: [0, 1], isInput: false)
+            ]
+        )
+        return UnityClock(io: io, input: inputUID, local: localUID, air: airUID)
+    }
+
+    private func drive(
+        _ io: AudioIOCoordinator,
+        role: HALIORole,
+        uid: String,
+        samples: inout [Float],
+        frameCount: Int,
+        channelCount: Int = 2
+    ) {
+        samples.withUnsafeMutableBufferPointer { pointer in
+            io.handleHardwareIO(
+                role: role,
+                uid: uid,
+                interleavedFrames: pointer.baseAddress!,
+                frameCount: frameCount,
+                channelCount: channelCount
+            )
+        }
+    }
+
     func testMixIOCycleRunIsTheShippedCaptureMixRoutePath() {
         var feeds: [String: AirPlaySafeBuffer] = [:]
         let strips = [
